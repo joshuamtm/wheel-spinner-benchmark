@@ -69,16 +69,17 @@
 
         .pointer {
             position: absolute;
-            top: -30px;
+            top: 10px;
             left: 50%;
             transform: translateX(-50%);
             width: 0;
             height: 0;
-            border-left: 30px solid transparent;
-            border-right: 30px solid transparent;
-            border-top: 60px solid #fff;
-            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5));
+            border-left: 25px solid transparent;
+            border-right: 25px solid transparent;
+            border-top: 50px solid #ff0000;
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.8));
             z-index: 10;
+            border-bottom: 8px solid #ff0000;
         }
 
         .spin-button {
@@ -292,18 +293,22 @@
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         
         function playTickSound() {
+            playTickSoundWithPitch(800);
+        }
+        
+        function playTickSoundWithPitch(pitch) {
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
             
             oscillator.connect(gainNode);
             gainNode.connect(audioContext.destination);
             
-            oscillator.frequency.value = 800;
+            oscillator.frequency.value = pitch;
             oscillator.type = 'square';
-            gainNode.gain.value = 0.1;
+            gainNode.gain.value = 0.15;
             
             oscillator.start();
-            oscillator.stop(audioContext.currentTime + 0.05);
+            oscillator.stop(audioContext.currentTime + 0.03);
         }
         
         function playCelebrationSound() {
@@ -324,13 +329,13 @@
         }
         
         // Draw wheel
-        function drawWheel(highlightIndex = -1) {
+        function drawWheel(highlightIndex = -1, rotationOffset = 0) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
             const anglePerSegment = (Math.PI * 2) / names.length;
             
             for (let i = 0; i < names.length; i++) {
-                const startAngle = i * anglePerSegment - Math.PI / 2;
+                const startAngle = i * anglePerSegment - Math.PI / 2 + rotationOffset;
                 const endAngle = startAngle + anglePerSegment;
                 
                 // Draw segment
@@ -391,8 +396,10 @@
             // Calculate spin parameters
             const spinDuration = 4000 + Math.random() * 2000; // 4-6 seconds
             const totalRotation = (Math.PI * 2 * (8 + Math.random() * 4)); // 8-12 full rotations
+            const finalRotation = totalRotation % (Math.PI * 2);
             const startTime = Date.now();
             let lastTickAngle = 0;
+            let tickCount = 0;
             
             function animate() {
                 const currentTime = Date.now();
@@ -406,35 +413,35 @@
                 const rotation = totalRotation * easeOut;
                 currentRotation = rotation % (Math.PI * 2);
                 
-                // Check for tick sound
+                // Check for tick sound with variable speed
                 const anglePerSegment = (Math.PI * 2) / names.length;
-                if (Math.floor(rotation / anglePerSegment) !== Math.floor(lastTickAngle / anglePerSegment)) {
-                    playTickSound();
+                const currentSegment = Math.floor(rotation / anglePerSegment);
+                if (currentSegment !== Math.floor(lastTickAngle / anglePerSegment)) {
+                    // Increase pitch as wheel slows down for realistic effect
+                    const pitch = 600 + (progress * 400);
+                    playTickSoundWithPitch(pitch);
                     lastTickAngle = rotation;
+                    tickCount++;
                 }
                 
-                // Apply rotation
-                ctx.save();
-                ctx.translate(centerX, centerY);
-                ctx.rotate(rotation);
-                ctx.translate(-centerX, -centerY);
-                drawWheel();
-                ctx.restore();
+                // Draw wheel with rotation
+                drawWheel(-1, rotation);
                 
                 if (progress < 1) {
                     requestAnimationFrame(animate);
                 } else {
-                    // Determine winner
-                    const winningIndex = Math.floor(((Math.PI * 2 - currentRotation + Math.PI / 2) / (Math.PI * 2)) * names.length) % names.length;
+                    // Determine winner - the segment at the top where arrow points
+                    const anglePerSegment = (Math.PI * 2) / names.length;
+                    // Normalize the final rotation to 0-2π range
+                    const normalizedRotation = ((finalRotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+                    // Calculate which segment is at the top (12 o'clock position)
+                    const topAngle = (Math.PI * 2 - normalizedRotation) % (Math.PI * 2);
+                    // Find which segment index this corresponds to
+                    const winningIndex = Math.floor((topAngle + anglePerSegment / 2) / anglePerSegment) % names.length;
                     const winner = names[winningIndex];
                     
                     // Highlight winning segment
-                    ctx.save();
-                    ctx.translate(centerX, centerY);
-                    ctx.rotate(rotation);
-                    ctx.translate(-centerX, -centerY);
-                    drawWheel(winningIndex);
-                    ctx.restore();
+                    drawWheel(winningIndex, finalRotation);
                     
                     // Show celebration
                     setTimeout(() => {
@@ -538,7 +545,7 @@
         });
         
         // Initialize
-        drawWheel();
+        drawWheel(-1, 0);
         setupEditMode();
         
         // Welcome message
